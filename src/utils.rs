@@ -205,6 +205,7 @@ pub fn check_and_set_closed_flag(closed: &RwLock<bool>, flag: bool) -> Result<()
 }
 
 pub fn send_command(inner: &Arc<RedisClientInner>, command: RedisCommand) -> Result<(), RedisError> {
+  trace!("\n\nfred: Before send_command incr_atomic");
   incr_atomic(&inner.cmd_buffer_len);
 
   if command.kind == RedisCommandKind::Quit {
@@ -220,8 +221,9 @@ pub fn send_command(inner: &Arc<RedisClientInner>, command: RedisCommand) -> Res
       ))
     }
   }else{
+    trace!("\n\nfred: Before send_command command_tx.read");
     let command_guard = inner.command_tx.read();
-
+    trace!("\n\nfred: Before send_command unbounded_send");
     match *command_guard.deref() {
       Some(ref tx) => tx.unbounded_send(command).map_err(|e| {
         RedisError::new(RedisErrorKind::Unknown, format!("Error sending command: {}.", e))
@@ -236,12 +238,14 @@ pub fn send_command(inner: &Arc<RedisClientInner>, command: RedisCommand) -> Res
 pub fn request_response<F>(inner: &Arc<RedisClientInner>, func: F) -> Box<Future<Item=ProtocolFrame, Error=RedisError>>
   where F: FnOnce() -> Result<(RedisCommandKind, Vec<RedisValue>), RedisError>
 {
+  trace!("\n\nfred: Before func()");
   //let _ = fry!(check_client_state(&inner.state, ClientState::Connected));
   let (kind, args) = fry!(func());
-
+  trace!("\n\nfred: kind: {:?}, args: {:?}", kind, args);
   let (tx, rx) = oneshot_channel();
   let command = RedisCommand::new(kind, args, Some(tx));
 
+  trace!("\n\nfred: Before send_command command: {:?}", command);
    match send_command(&inner, command) {
      Ok(_) => Box::new(rx.from_err::<RedisError>().flatten()),
      Err(e) => future_error(e)

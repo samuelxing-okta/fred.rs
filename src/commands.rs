@@ -672,6 +672,7 @@ pub fn hdel<F: Into<MultipleKeys>, K: Into<RedisKey>> (inner: &Arc<RedisClientIn
   let key = key.into();
   let mut fields = fields.into().inner();
 
+  trace!("\n\nfred: Before request_response");
   Box::new(utils::request_response(inner, move || {
     let mut args: Vec<RedisValue> = Vec::with_capacity(fields.len() + 1);
     args.push(key.into());
@@ -682,8 +683,9 @@ pub fn hdel<F: Into<MultipleKeys>, K: Into<RedisKey>> (inner: &Arc<RedisClientIn
 
     Ok((RedisCommandKind::HDel, args))
   }).and_then(|frame| {
+    trace!("\n\nfred: Before frame_to_single_result");
     let resp = protocol_utils::frame_to_single_result(frame)?;
-
+    trace!("\n\nfred: Before hdel return resp: {:?}", resp);
     match resp {
       RedisValue::Integer(num) => Ok(num as usize),
       _ => Err(RedisError::new(
