@@ -207,7 +207,7 @@ pub fn check_and_set_closed_flag(closed: &RwLock<bool>, flag: bool) -> Result<()
 pub fn send_command(inner: &Arc<RedisClientInner>, command: RedisCommand) -> Result<(), RedisError> {
   debug!("\n\nfred: Before send_command incr_atomic");
   incr_atomic(&inner.cmd_buffer_len);
-
+  debug!("\n\nfred: After send_command incr_atomic");
   if command.kind == RedisCommandKind::Quit {
     let mut command_guard = inner.command_tx.write();
 
@@ -247,7 +247,10 @@ pub fn request_response<F>(inner: &Arc<RedisClientInner>, func: F) -> Box<Future
 
   debug!("\n\nfred: Before send_command command: {:?}", command);
    match send_command(&inner, command) {
-     Ok(_) => Box::new(rx.from_err::<RedisError>().flatten()),
+     Ok(_) => {
+      debug!("\n\nfred: After send_command command with result OK");
+      Box::new(rx.from_err::<RedisError>().flatten())
+    },
      Err(e) => future_error(e)
    }
 }

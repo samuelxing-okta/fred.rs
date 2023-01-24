@@ -672,7 +672,7 @@ pub fn hdel<F: Into<MultipleKeys>, K: Into<RedisKey>> (inner: &Arc<RedisClientIn
   let key = key.into();
   let mut fields = fields.into().inner();
 
-  debug!("\n\nfred: Before request_response");
+  debug!("\n\nfred: Before hdel request_response");
   Box::new(utils::request_response(inner, move || {
     let mut args: Vec<RedisValue> = Vec::with_capacity(fields.len() + 1);
     args.push(key.into());
