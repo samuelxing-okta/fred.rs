@@ -160,11 +160,12 @@ impl Multiplexer {
 
   /// Send a command to the Redis server(s).
   pub fn write_command(&self, inner: &Arc<RedisClientInner>, request: &mut RedisCommand) -> Box<Future<Item=(), Error=RedisError>> {
-    trace!("{} Multiplexer sending command {:?}", n!(inner), request.kind);
+    debug!("{} Multiplexer sending command {:?}", n!(inner), request.kind);
     if request.attempted > 0 {
+      debug!("Multiplexer increasing redeliver_count");
       client_utils::incr_atomic(&inner.redeliver_count);
     }
-
+    debug!("Multiplexer request incr_attempted");
     request.incr_attempted();
 
     let no_cluster = request.no_cluster();
@@ -186,6 +187,7 @@ impl Multiplexer {
     if request.kind == RedisCommandKind::Quit {
       self.sinks.quit(frame)
     }else{
+      debug!("Before Multiplexer sinks write_command key: {:?}, no_cluster: {:?}, key_slot: {:?}", key, no_cluster, key_slot);
       self.sinks.write_command(key, frame, no_cluster, key_slot)
     }
   }
