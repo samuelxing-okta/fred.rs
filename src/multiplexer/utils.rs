@@ -38,9 +38,10 @@ use std::collections::{
 };
 use std::mem;
 use crate::protocol::types::{RedisCommand, RedisCommandKind};
-use crate::client::{RedisClientInner, RedisClient};
+use crate::client::{RedisClientInner, RedisClient, CommandSender};
 use crate::types::{RedisConfig, ReconnectPolicy, RedisValue, RedisKey, ScanResult, ZScanResult, SScanResult, HScanResult};
 use futures::sync::mpsc::UnboundedSender;
+
 use crate::protocol::utils::frame_to_single_result;
 use crate::utils::send_command;
 
@@ -53,7 +54,7 @@ pub fn take_option<T>(opt: &Rc<RefCell<Option<T>>>) -> Option<T> {
   opt.borrow_mut().take()
 }
 
-pub fn set_command_tx(inner: &Arc<RedisClientInner>, tx: UnboundedSender<RedisCommand>) {
+pub fn set_command_tx(inner: &Arc<RedisClientInner>, tx: CommandSender) {
   let mut guard = inner.command_tx.write();
   let mut guard_ref = guard.deref_mut();
   *guard_ref = Some(tx);

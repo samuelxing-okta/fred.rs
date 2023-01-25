@@ -145,6 +145,12 @@ impl From<Canceled> for RedisError {
   }
 }
 
+impl From<tokio_sync::mpsc::error::UnboundedRecvError> for RedisError {
+  fn from(e: tokio_sync::mpsc::error::UnboundedRecvError) -> Self {
+    RedisError::new(RedisErrorKind::Unknown, format!("{}", e))
+  }  
+}
+
 impl From<Frame> for RedisError {
   fn from(e: Frame) -> Self {
     match e {

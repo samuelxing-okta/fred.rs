@@ -6,7 +6,8 @@ use futures::{
   lazy
 };
 use futures::future::{loop_fn, Loop, Either};
-use futures::sync::mpsc::{UnboundedSender, unbounded};
+// use futures::sync::mpsc::{UnboundedSender, unbounded};
+use tokio_sync::mpsc::{UnboundedSender, unbounded_channel as unbounded};
 use futures::sync::oneshot::{
   Sender as OneshotSender,
   channel as oneshot_channel
@@ -512,7 +513,7 @@ fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Futur
     rx.from_err::<RedisError>().fold((handle, inner, multiplexer, None), |(handle, inner, multiplexer, err): CommandLoopState, mut command: RedisCommand| {
       debug!("{} Handling redis command {:?}", n!(inner), command.kind);
       client_utils::decr_atomic(&inner.cmd_buffer_len);
-      debug!("Decreased command buffer length");
+
       if command.kind.is_close() {
         debug!("{} Recv close command on the command stream.", n!(inner));
 
@@ -550,12 +551,9 @@ fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Futur
         }
 
         let (tx, rx) = oneshot_channel();
-        debug!("Before set last command callback");
         multiplexer.set_last_command_callback(Some(tx));
 
-        debug!("Before write redis command");
         let write_ft = multiplexer.write_command(&inner, &mut command);
-        debug!("Before set last request");
         multiplexer.set_last_request(Some(command));
 
         Box::new(write_ft.then(move |result| {

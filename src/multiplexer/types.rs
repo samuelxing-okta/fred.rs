@@ -332,7 +332,6 @@ impl Sinks {
 
     match *self {
       Sinks::Centralized(ref sink) => {
-        debug!("Enter Sinks::Centralized");
         let owned_sink = {
           let mut sink_ref = sink.borrow_mut();
 
@@ -347,7 +346,6 @@ impl Sinks {
         };
 
         let sink_copy = sink.clone();
-        debug!("Before Sinks::Centralized send frame");
         Box::new(owned_sink.send(frame)
           .map_err(|e| e.into())
           .and_then(move |sink| {
@@ -358,7 +356,6 @@ impl Sinks {
           }))
       },
       Sinks::Clustered { ref sinks, ref cluster_cache } => {
-        debug!("Enter Sinks::Clustered");
         let node = if no_cluster && key_slot.is_none() {
           let cluster_cache_ref = cluster_cache.borrow();
 
@@ -391,7 +388,7 @@ impl Sinks {
               }
             }
           };
-          debug!("Before cluster_cache_ref get_server");
+
           match cluster_cache_ref.get_server(slot) {
             Some(s) => s,
             None => {
@@ -419,11 +416,9 @@ impl Sinks {
         };
 
         let sinks = sinks.clone();
-        debug!("Before Sinks::Clustered owned_sink send frame");
         Box::new(owned_sink.send(frame)
           .map_err(|e| e.into())
           .and_then(move |sink| {
-            debug!("After Sinks::Clustered owned_sink send frame");
             let mut sinks_ref = sinks.borrow_mut();
             sinks_ref.insert(node.server.clone(), sink);
 

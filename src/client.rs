@@ -47,7 +47,7 @@ const SPLIT_TIMEOUT_MS: u64 = 30_000;
 use crate::utils;
 
 #[doc(hidden)]
-pub type CommandSender = UnboundedSender<RedisCommand>;
+pub type CommandSender = tokio_sync::mpsc::UnboundedSender<RedisCommand>;
 
 pub use utils::redis_string_to_f64;
 pub use utils::f64_to_redis_string;
