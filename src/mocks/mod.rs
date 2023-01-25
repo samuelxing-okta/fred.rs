@@ -23,7 +23,6 @@ use futures::sync::oneshot::{
 use futures::sync::mpsc::{
   unbounded
 };
-
 use crate::multiplexer::Multiplexer;
 use crate::client::RedisClientInner;
 use crate::error::*;
@@ -36,7 +35,7 @@ use std::time::Duration;
 
 
 pub fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Future<Item=Option<RedisError>, Error=RedisError>> {
-  let (tx, rx) = unbounded();
+  let (tx, rx) = tokio_sync::mpsc::unbounded_channel();
   let expire_tx = tx.clone();
   multiplexer_utils::set_command_tx(&inner, tx);
 
@@ -62,7 +61,7 @@ pub fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<F
       };
 
       trace!("Cleaning up mock {} expired keys", expired.len());
-      utils::cleanup_keys(&expire_tx, expired);
+      utils::cleanup_keys(expire_tx.clone(), expired);
     }
 
     Ok::<(), ()>(())

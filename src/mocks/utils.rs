@@ -68,7 +68,7 @@ pub fn global_data_set_db(db: u8) -> Arc<RwLock<DataSet>> {
 }
 
 
-pub fn cleanup_keys(tx: &UnboundedSender<RedisCommand>, mut expired: Vec<Arc<ExpireLog>>) {
+pub fn cleanup_keys(mut tx: tokio_sync::mpsc::UnboundedSender<RedisCommand>, mut expired: Vec<Arc<ExpireLog>>) {
   for expire_log in expired.into_iter() {
     let mut expire_ref = match Arc::try_unwrap(expire_log) {
       Ok(r) => r,
@@ -90,7 +90,7 @@ pub fn cleanup_keys(tx: &UnboundedSender<RedisCommand>, mut expired: Vec<Arc<Exp
       attempted: 0
     };
 
-    let _ = tx.unbounded_send(command);
+    let _ = tx.try_send(command);
   }
 }
 
