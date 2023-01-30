@@ -221,7 +221,7 @@ pub fn send_command(inner: &Arc<RedisClientInner>, command: RedisCommand) -> Res
   }else{
     let command_guard = inner.command_tx.read();
 
-    debug!("\n\nfred: send_command: {:?}", command.kind);
+    debug!("\n\n {} fred: send_command: {:?}", n!(inner), command.kind);
     let command_opt = command_guard.deref().clone();
     match command_opt {
       Some(mut tx) => tx.try_send(command).map_err(|e| {

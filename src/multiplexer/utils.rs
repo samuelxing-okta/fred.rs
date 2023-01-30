@@ -569,7 +569,9 @@ pub fn process_frame(inner: &Arc<RedisClientInner>,
       };
       trace!("{} Responding to last request with frame containing multiple frames.", n!(inner));
 
-      let _ = last_request_tx.send(Ok(frames));
+      if let Err(e) = last_request_tx.send(Ok(frames)) {
+        warn!("process_frame: last request send returns error: {:?}", e);
+      }
     }
   }else if last_command_has_blocking_response(last_request) {
 
@@ -681,7 +683,9 @@ fn process_simple_frame(inner: &Arc<RedisClientInner>,
   };
   trace!("{} Responding to last request with frame.", n!(inner));
 
-  let _ = last_request_tx.send(Ok(frame));
+  if let Err(e) = last_request_tx.send(Ok(frame)) {
+    warn!("process_simple_frame: last request send returns error: {:?}", e);
+  }
 }
 
 #[cfg(feature = "reconnect-on-auth-error")]
@@ -730,7 +734,10 @@ fn send_to_channels(inner: &Arc<RedisClientInner>,
   };
   trace!("{} Responding to last request with frame.", n!(inner));
 
-  let _ = last_request_tx.send(Ok(frame));
+  if let Err(e) = last_request_tx.send(Ok(frame)) {
+    warn!("send_to_channels: last request send returns error: {:?}", e)
+  }
+  
 }
 
 // sends error to command channel, unless we are quitting
@@ -767,7 +774,9 @@ fn send_to_channels_error(inner: &Arc<RedisClientInner>,
             };
 
             trace!("{} Responding to last request with frame.", n!(inner));
-            let _ = last_request_tx.send(Ok(frame));
+            if let Err(e) = last_request_tx.send(Ok(frame)) {
+              warn!("send_to_channels_error: last request send returns error: {:?}", e)
+            }
           }else{
             // send the last command and error to the command channel
             info!("{} Sending error to last request: {}", n!(inner), redis_error);

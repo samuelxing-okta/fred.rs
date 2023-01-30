@@ -497,8 +497,8 @@ fn rebuild_connection(handle: Handle, inner: Arc<RedisClientInner>, multiplexer:
 }
 
 fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Future<Item=Option<RedisError>, Error=RedisError>> {
-  let (tx, rx) = unbounded();
-  utils::set_command_tx(&inner, tx);
+  let (command_tx, command_rx) = unbounded();
+  utils::set_command_tx(&inner, command_tx);
 
   let multiplexer = Multiplexer::new(&inner);
 
@@ -510,7 +510,7 @@ fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Futur
     }
   })
   .and_then(move |(handle, inner, multiplexer)| {
-    rx.from_err::<RedisError>().fold((handle, inner, multiplexer, None), |(handle, inner, multiplexer, err): CommandLoopState, mut command: RedisCommand| {
+    command_rx.from_err::<RedisError>().fold((handle, inner, multiplexer, None), |(handle, inner, multiplexer, err): CommandLoopState, mut command: RedisCommand| {
       debug!("{} Handling redis command {:?}", n!(inner), command.kind);
       client_utils::decr_atomic(&inner.cmd_buffer_len);
 
@@ -550,8 +550,8 @@ fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Futur
           client_utils::set_client_state(&inner.state, ClientState::Disconnecting);
         }
 
-        let (tx, rx) = oneshot_channel();
-        multiplexer.set_last_command_callback(Some(tx));
+        let (multiplexer_tx, multiplexer_rx) = oneshot_channel();
+        multiplexer.set_last_command_callback(Some(multiplexer_tx));
 
         let write_ft = multiplexer.write_command(&inner, &mut command);
         multiplexer.set_last_request(Some(command));
@@ -573,7 +573,7 @@ fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Futur
 
             rebuild_connection(handle, inner, multiplexer, false, last_command)
           }else{
-            Box::new(rx.from_err::<RedisError>().then(move |result| {
+            Box::new(multiplexer_rx.from_err::<RedisError>().then(move |result| {
               // if an error occurs waiting on the response then check the reconnect policy and try to reconnect,
               // then build multiplexer state, otherwise move on to the next command
 
