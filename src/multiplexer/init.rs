@@ -446,17 +446,17 @@ fn rebuild_connection(handle: Handle, inner: Arc<RedisClientInner>, multiplexer:
 
       debug!("{} Retry sending last command after building connection: {:?}", n!(inner), last_command.kind);
 
-      let (tx, rx) = oneshot_channel();
-      multiplexer.set_last_command_callback(Some(tx));
+      let (last_command_tx, last_command_rx) = oneshot_channel();
+      multiplexer.set_last_command_callback(Some(last_command_tx));
 
       let write_ft = multiplexer.write_command(&inner, &mut last_command);
       multiplexer.set_last_request(Some(last_command));
 
-      Box::new(write_ft.then(move |result| Ok((handle, inner, multiplexer, Some((rx, result))))))
+      Box::new(write_ft.then(move |result| Ok((handle, inner, multiplexer, Some((last_command_rx, result))))))
     })
     .and_then(move |(handle, inner, multiplexer, result)| {
-      let (rx, result) = match result {
-        Some((rx, result)) => (rx, result),
+      let (last_command_rx, result) = match result {
+        Some((last_command_rx, result)) => (last_command_rx, result),
         // we didnt attempt to send the last command again, so break out
         None => return client_utils::future_ok(Loop::Break((handle, inner, multiplexer, None)))
       };
@@ -477,7 +477,7 @@ fn rebuild_connection(handle: Handle, inner: Arc<RedisClientInner>, multiplexer:
         client_utils::future_ok(Loop::Continue((handle, inner, multiplexer, force_no_backoff, last_command)))
       }else{
         // wait on the last request callback, if successful break, else continue retrying
-        Box::new(rx.from_err::<RedisError>().then(move |result| {
+        Box::new(last_command_rx.from_err::<RedisError>().then(move |result| {
           match result {
             Ok(Some((last_command, error))) => {
               if let Some(ref mut p) = inner.policy.write().deref_mut() {

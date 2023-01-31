@@ -205,7 +205,7 @@ pub fn check_and_set_closed_flag(closed: &RwLock<bool>, flag: bool) -> Result<()
 }
 
 pub fn send_command(inner: &Arc<RedisClientInner>, command: RedisCommand) -> Result<(), RedisError> {
-  debug!("\n\n{} fred: send_command: {:?}", n!(inner), command.kind);
+  debug!("fred: send_command: {:?}", command.kind);
   incr_atomic(&inner.cmd_buffer_len);
   if command.kind == RedisCommandKind::Quit {
     let mut command_guard = inner.command_tx.write();
