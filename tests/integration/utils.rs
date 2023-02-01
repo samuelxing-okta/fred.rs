@@ -157,8 +157,6 @@ pub fn setup_two_test_clients<F: FnOnce(RedisClient, RedisClient) -> TestFuture>
 }
 
 pub fn random_string(len: usize) -> String {
-  rand::thread_rng()
-    .gen_ascii_chars()
-    .take(len)
-    .collect()
+  let mut rng = rand::thread_rng();
+  (0..len).map(|_| rng.sample(rand::distributions::Alphanumeric) as char).collect()
 }

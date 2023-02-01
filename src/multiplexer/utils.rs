@@ -38,9 +38,10 @@ use std::collections::{
 };
 use std::mem;
 use crate::protocol::types::{RedisCommand, RedisCommandKind};
-use crate::client::{RedisClientInner, RedisClient};
+use crate::client::{RedisClientInner, RedisClient, CommandSender};
 use crate::types::{RedisConfig, ReconnectPolicy, RedisValue, RedisKey, ScanResult, ZScanResult, SScanResult, HScanResult};
 use futures::sync::mpsc::UnboundedSender;
+
 use crate::protocol::utils::frame_to_single_result;
 use crate::utils::send_command;
 
@@ -53,7 +54,7 @@ pub fn take_option<T>(opt: &Rc<RefCell<Option<T>>>) -> Option<T> {
   opt.borrow_mut().take()
 }
 
-pub fn set_command_tx(inner: &Arc<RedisClientInner>, tx: UnboundedSender<RedisCommand>) {
+pub fn set_command_tx(inner: &Arc<RedisClientInner>, tx: CommandSender) {
   let mut guard = inner.command_tx.write();
   let mut guard_ref = guard.deref_mut();
   *guard_ref = Some(tx);
@@ -568,7 +569,9 @@ pub fn process_frame(inner: &Arc<RedisClientInner>,
       };
       trace!("{} Responding to last request with frame containing multiple frames.", n!(inner));
 
-      let _ = last_request_tx.send(Ok(frames));
+      if let Err(e) = last_request_tx.send(Ok(frames)) {
+        warn!("process_frame: last request send returns error: {:?}", e);
+      }
     }
   }else if last_command_has_blocking_response(last_request) {
 
@@ -680,7 +683,9 @@ fn process_simple_frame(inner: &Arc<RedisClientInner>,
   };
   trace!("{} Responding to last request with frame.", n!(inner));
 
-  let _ = last_request_tx.send(Ok(frame));
+  if let Err(e) = last_request_tx.send(Ok(frame)) {
+    warn!("process_simple_frame: last request send returns error: {:?}", e);
+  }
 }
 
 #[cfg(feature = "reconnect-on-auth-error")]
@@ -729,7 +734,10 @@ fn send_to_channels(inner: &Arc<RedisClientInner>,
   };
   trace!("{} Responding to last request with frame.", n!(inner));
 
-  let _ = last_request_tx.send(Ok(frame));
+  if let Err(e) = last_request_tx.send(Ok(frame)) {
+    warn!("send_to_channels: last request send returns error: {:?}", e)
+  }
+  
 }
 
 // sends error to command channel, unless we are quitting
@@ -766,7 +774,9 @@ fn send_to_channels_error(inner: &Arc<RedisClientInner>,
             };
 
             trace!("{} Responding to last request with frame.", n!(inner));
-            let _ = last_request_tx.send(Ok(frame));
+            if let Err(e) = last_request_tx.send(Ok(frame)) {
+              warn!("send_to_channels_error: last request send returns error: {:?}", e)
+            }
           }else{
             // send the last command and error to the command channel
             info!("{} Sending error to last request: {}", n!(inner), redis_error);

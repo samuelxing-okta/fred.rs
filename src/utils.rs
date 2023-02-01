@@ -205,14 +205,14 @@ pub fn check_and_set_closed_flag(closed: &RwLock<bool>, flag: bool) -> Result<()
 }
 
 pub fn send_command(inner: &Arc<RedisClientInner>, command: RedisCommand) -> Result<(), RedisError> {
+  debug!("fred: send_command: {:?}", command.kind);
   incr_atomic(&inner.cmd_buffer_len);
-
   if command.kind == RedisCommandKind::Quit {
     let mut command_guard = inner.command_tx.write();
 
     let command_opt = command_guard.deref_mut().take();
     match command_opt {
-      Some(tx) => tx.unbounded_send(command).map_err(|e| {
+      Some(mut tx) => tx.try_send(command).map_err(|e| {
         RedisError::new(RedisErrorKind::Unknown, format!("Error sending command: {}.", e))
       }),
       None => Err(RedisError::new(
@@ -222,8 +222,9 @@ pub fn send_command(inner: &Arc<RedisClientInner>, command: RedisCommand) -> Res
   }else{
     let command_guard = inner.command_tx.read();
 
-    match *command_guard.deref() {
-      Some(ref tx) => tx.unbounded_send(command).map_err(|e| {
+    let command_opt = command_guard.deref().clone();
+    match command_opt {
+      Some(mut tx) => tx.try_send(command).map_err(|e| {
         RedisError::new(RedisErrorKind::Unknown, format!("Error sending command: {}.", e))
       }),
       None => Err(RedisError::new(
@@ -243,7 +244,10 @@ pub fn request_response<F>(inner: &Arc<RedisClientInner>, func: F) -> Box<Future
   let command = RedisCommand::new(kind, args, Some(tx));
 
    match send_command(&inner, command) {
-     Ok(_) => Box::new(rx.from_err::<RedisError>().flatten()),
+     Ok(_) => {
+      debug!("\n\nfred: send_command OK");
+      Box::new(rx.from_err::<RedisError>().flatten())
+    },
      Err(e) => future_error(e)
    }
 }

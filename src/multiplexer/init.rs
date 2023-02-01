@@ -6,7 +6,8 @@ use futures::{
   lazy
 };
 use futures::future::{loop_fn, Loop, Either};
-use futures::sync::mpsc::{UnboundedSender, unbounded};
+// use futures::sync::mpsc::{UnboundedSender, unbounded};
+use tokio_sync::mpsc::{UnboundedSender, unbounded_channel as unbounded};
 use futures::sync::oneshot::{
   Sender as OneshotSender,
   channel as oneshot_channel
@@ -445,17 +446,17 @@ fn rebuild_connection(handle: Handle, inner: Arc<RedisClientInner>, multiplexer:
 
       debug!("{} Retry sending last command after building connection: {:?}", n!(inner), last_command.kind);
 
-      let (tx, rx) = oneshot_channel();
-      multiplexer.set_last_command_callback(Some(tx));
+      let (last_command_tx, last_command_rx) = oneshot_channel();
+      multiplexer.set_last_command_callback(Some(last_command_tx));
 
       let write_ft = multiplexer.write_command(&inner, &mut last_command);
       multiplexer.set_last_request(Some(last_command));
 
-      Box::new(write_ft.then(move |result| Ok((handle, inner, multiplexer, Some((rx, result))))))
+      Box::new(write_ft.then(move |result| Ok((handle, inner, multiplexer, Some((last_command_rx, result))))))
     })
     .and_then(move |(handle, inner, multiplexer, result)| {
-      let (rx, result) = match result {
-        Some((rx, result)) => (rx, result),
+      let (last_command_rx, result) = match result {
+        Some((last_command_rx, result)) => (last_command_rx, result),
         // we didnt attempt to send the last command again, so break out
         None => return client_utils::future_ok(Loop::Break((handle, inner, multiplexer, None)))
       };
@@ -476,7 +477,7 @@ fn rebuild_connection(handle: Handle, inner: Arc<RedisClientInner>, multiplexer:
         client_utils::future_ok(Loop::Continue((handle, inner, multiplexer, force_no_backoff, last_command)))
       }else{
         // wait on the last request callback, if successful break, else continue retrying
-        Box::new(rx.from_err::<RedisError>().then(move |result| {
+        Box::new(last_command_rx.from_err::<RedisError>().then(move |result| {
           match result {
             Ok(Some((last_command, error))) => {
               if let Some(ref mut p) = inner.policy.write().deref_mut() {
@@ -496,8 +497,8 @@ fn rebuild_connection(handle: Handle, inner: Arc<RedisClientInner>, multiplexer:
 }
 
 fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Future<Item=Option<RedisError>, Error=RedisError>> {
-  let (tx, rx) = unbounded();
-  utils::set_command_tx(&inner, tx);
+  let (command_tx, command_rx) = unbounded();
+  utils::set_command_tx(&inner, command_tx);
 
   let multiplexer = Multiplexer::new(&inner);
 
@@ -509,7 +510,7 @@ fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Futur
     }
   })
   .and_then(move |(handle, inner, multiplexer)| {
-    rx.from_err::<RedisError>().fold((handle, inner, multiplexer, None), |(handle, inner, multiplexer, err): CommandLoopState, mut command: RedisCommand| {
+    command_rx.from_err::<RedisError>().fold((handle, inner, multiplexer, None), |(handle, inner, multiplexer, err): CommandLoopState, mut command: RedisCommand| {
       debug!("{} Handling redis command {:?}", n!(inner), command.kind);
       client_utils::decr_atomic(&inner.cmd_buffer_len);
 
@@ -549,8 +550,8 @@ fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Futur
           client_utils::set_client_state(&inner.state, ClientState::Disconnecting);
         }
 
-        let (tx, rx) = oneshot_channel();
-        multiplexer.set_last_command_callback(Some(tx));
+        let (multiplexer_tx, multiplexer_rx) = oneshot_channel();
+        multiplexer.set_last_command_callback(Some(multiplexer_tx));
 
         let write_ft = multiplexer.write_command(&inner, &mut command);
         multiplexer.set_last_request(Some(command));
@@ -572,7 +573,7 @@ fn create_commands_ft(handle: Handle, inner: Arc<RedisClientInner>) -> Box<Futur
 
             rebuild_connection(handle, inner, multiplexer, false, last_command)
           }else{
-            Box::new(rx.from_err::<RedisError>().then(move |result| {
+            Box::new(multiplexer_rx.from_err::<RedisError>().then(move |result| {
               // if an error occurs waiting on the response then check the reconnect policy and try to reconnect,
               // then build multiplexer state, otherwise move on to the next command
 

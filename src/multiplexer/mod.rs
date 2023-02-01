@@ -160,11 +160,10 @@ impl Multiplexer {
 
   /// Send a command to the Redis server(s).
   pub fn write_command(&self, inner: &Arc<RedisClientInner>, request: &mut RedisCommand) -> Box<Future<Item=(), Error=RedisError>> {
-    trace!("{} Multiplexer sending command {:?}", n!(inner), request.kind);
+    debug!("{} Multiplexer sending command {:?}", n!(inner), request.kind);
     if request.attempted > 0 {
       client_utils::incr_atomic(&inner.redeliver_count);
     }
-
     request.incr_attempted();
 
     let no_cluster = request.no_cluster();
@@ -286,8 +285,10 @@ impl Multiplexer {
               debug!("{} Couldn't find last command callback on error in multiplexer frame stream.", n!(final_inner));
 
               // since there's no request pending in the command stream we have to send a message via the message queue in order to force a reconnect event to occur.
-              if let Some(ref tx) = final_inner.command_tx.read().deref() {
-                tx.unbounded_send(RedisCommand::new(RedisCommandKind::_Close, vec![], None));
+              if let Some(mut tx) = final_inner.command_tx.read().deref().clone() {
+                let _ = tx.try_send(RedisCommand::new(RedisCommandKind::_Close, vec![], None)).map_err(|e| {
+                  warn!("Error sending command: {}.", e)
+                });
               }
 
               return Ok(());

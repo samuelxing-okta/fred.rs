@@ -346,7 +346,6 @@ impl Sinks {
         };
 
         let sink_copy = sink.clone();
-
         Box::new(owned_sink.send(frame)
           .map_err(|e| e.into())
           .and_then(move |sink| {
@@ -373,13 +372,13 @@ impl Sinks {
 
           let slot = match key_slot {
             Some(key_slot) => {
-              trace!("Using custom key slot {:?}", key_slot);
+              debug!("Using custom key slot {:?}", key_slot);
               key_slot
             },
             None => match key {
               Some(ref k) => {
                 let key_slot = redis_keyslot(k);
-                trace!("Mapped key to slot: {:?} -> {:?}", key, key_slot);
+                debug!("Mapped key to slot: {:?} -> {:?}", key, key_slot);
                 key_slot
               },
               None => {
@@ -405,7 +404,7 @@ impl Sinks {
         let owned_sink = {
           let mut sinks_ref = sinks.borrow_mut();
 
-          trace!("Using redis node at {}", node.server);
+          debug!("Using redis node at {}", node.server);
           match sinks_ref.remove(&node.server) {
             Some(s) => s,
             None => {
@@ -417,7 +416,6 @@ impl Sinks {
         };
 
         let sinks = sinks.clone();
-
         Box::new(owned_sink.send(frame)
           .map_err(|e| e.into())
           .and_then(move |sink| {

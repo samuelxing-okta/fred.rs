@@ -683,9 +683,12 @@ pub fn hdel<F: Into<MultipleKeys>, K: Into<RedisKey>> (inner: &Arc<RedisClientIn
     Ok((RedisCommandKind::HDel, args))
   }).and_then(|frame| {
     let resp = protocol_utils::frame_to_single_result(frame)?;
-
+    
     match resp {
-      RedisValue::Integer(num) => Ok(num as usize),
+      RedisValue::Integer(num) => {
+        debug!("\n\nfred: HDEL success");
+        Ok(num as usize)
+      },
       _ => Err(RedisError::new(
         RedisErrorKind::ProtocolError, "Invalid HDEL response."
       ))
